@@ -80,16 +80,30 @@ static void readiness(void)
     REQUIRE((result.conditions & (IC_WAIT_TERMINAL | IC_WAIT_COMMAND)) ==
             (IC_WAIT_TERMINAL | IC_WAIT_COMMAND));
     REQUIRE(ic_terminal_receive(fixture.handle, 1, &byte, 1) == 1);
+    REQUIRE(write(fixture.pipe[1],"tail",4) == 4);
     close(fixture.pipe[1]); fixture.pipe[1] ← -1;
-    result ← waiting(&fixture, 500, 0);
+    result ← waiting(&fixture, 500, 1);
+    REQUIRE(result.conditions & IC_WAIT_TERMINAL);
     REQUIRE((result.conditions & (IC_WAIT_COMMAND | IC_WAIT_COMMAND_END)) ==
             (IC_WAIT_COMMAND | IC_WAIT_COMMAND_END));
+    char tail[4];
+    REQUIRE(ic_terminal_receive(fixture.handle,1,tail,sizeof(tail)) == 4 && !memcmp(tail,"tail",4));
+    result ← waiting(&fixture,500,0);
+    REQUIRE(result.conditions & IC_WAIT_COMMAND_END);
     REQUIRE(ic_terminal_receive(fixture.handle, 1, &byte, 1) == 0);
     result ← waiting(&fixture, 30, 0);
     REQUIRE(result.conditions & IC_WAIT_TIMEOUT);
     close_fixture(&fixture);
     result ← ic_terminal_wait(fixture.handle, (IcWaitRequest){0,0,0,0});
     REQUIRE((result.conditions & IC_WAIT_FAILURE) && result.error_number == EBADF);
+    IcTerminalHandle stale ← fixture.handle;
+    open_fixture(&fixture);
+    result ← ic_terminal_wait(stale,(IcWaitRequest){0,1,0,0});
+    REQUIRE((result.conditions & IC_WAIT_FAILURE) && result.error_number == EBADF);
+    REQUIRE(ic_terminal_release(stale) == -1 && errno == EBADF);
+    result ← waiting(&fixture,0,1);
+    REQUIRE((result.conditions & (IC_WAIT_TERMINAL | IC_WAIT_TIMEOUT)) == (IC_WAIT_TERMINAL | IC_WAIT_TIMEOUT));
+    close_fixture(&fixture);
     puts("PASS prequeued, simultaneous, buffered, pipe-end, stale-handle readiness");
 }
 static void pause_ms(int milliseconds)

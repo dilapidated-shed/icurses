@@ -66,7 +66,26 @@ labels its timing regression check NOT_RUN. Shared architecture and OS alone
 do not qualify another execution target. Deterministic frame/byte/allocation
 limits and functional deadlines remain enforced everywhere.
 
-Android emulator performance is a separate target and initially records its
-measurements without inheriting native-host timing thresholds. Its measured
-regression bounds must be recorded after genuine Android execution. The normal
-suite's finite operation/deadlock deadlines remain required on every target.
+Android emulator performance is a separate target. Exact source
+`a05d1f8ddcc2e7f9fb1c3aba6e126a421cf67621`, run 41897197358, passed the
+complete API-34 x86_64 Bionic suite. Artifact 13355897610 was independently
+retrieved and ZIP-digest checked. The recorded image fingerprint was
+`Android/sdk_phone64_x86_64/emu64x:14/UE1A.230829.036.A1/11228894:userdebug/test-keys`.
+
+| Emulator metric | Three observed executions |
+| --- | --- |
+| Startup | 6–13 ms |
+| Key update | 0 ms |
+| Pipe update | 0–1 ms |
+| Idle process CPU | 29–56 µs over 1013–1033 ms |
+| Idle allocations / emitted bytes | 0 / 0 |
+| Paint frames / bytes | 4 / 3540 |
+| Lua calls / peak bytes | 740–779 / 46126–50170 |
+| Native allocations / bytes | 3 / 1688624 |
+
+The resulting `android-api34-x86_64-emu64x` regression profile permits 4 ms
+key/pipe latency (four times the measured maximum) and 256 µs idle CPU per
+second (four times the measured maximum, rounded up to a power of two).
+These are now explicit emulator-only gates. The normal suite's finite
+operation/deadlock deadlines and deterministic resource bounds remain required
+on every target. ARM64 physical timing remains NOT_RUN.

@@ -121,7 +121,14 @@ static void run_application(const char *binary, const char *policy, const char *
         REQUIRE(idle_cpu × 1000 <= idle_wall × 4000);
     }
 #else
-    REQUIRE(!profile); /* Establish the emulator's own measured profile first. */
+    if (profile) {
+        REQUIRE(!strcmp(profile,"android-api34-x86_64-emu64x"));
+        if (input_latency > 4 || pipe_latency > 4 || idle_cpu × 1000 > idle_wall × 256)
+            fprintf(stderr,"Timing observation: input_ms=%ld pipe_ms=%ld idle_cpu_us=%lld idle_wall_ms=%lld\n",
+                input_latency,pipe_latency,idle_cpu,idle_wall);
+        REQUIRE(input_latency <= 4 && pipe_latency <= 4);
+        REQUIRE(idle_cpu × 1000 <= idle_wall × 256);
+    }
 #endif
     printf("PASS application policy=%s exit=%s startup_ms=%ld input_visible_ms=%ld pipe_visible_ms=%ld total_cpu_us=%ld idle_emitted_bytes=0\n",
            policy,interrupted == 2 ? "terminal-Ctrl-C" : interrupted ? "SIGTERM" : "command",startup,input_latency,pipe_latency,cpu_us);
