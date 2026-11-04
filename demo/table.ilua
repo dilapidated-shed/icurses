@@ -1,0 +1,107 @@
+-- Application data, selection, bindings and layout have exactly one owner.
+local bindings ← { down ← "j", up ← "k", quit ← "q", view ← "v" }
+
+function icurses_probe()
+    local values ← { result ← 6 }
+    values.result ← values.result + 7
+    local copied
+    values.result → copied
+    assert(copied ≟ 13 and copied ≠ 12)
+    return copied
+end
+
+local function named_application_command(kind, payload)
+    if kind ≟ "update" then return "update-data" end
+    if kind ≟ "resize" then return "resize-view" end
+    if kind ≟ "down" or (kind ≟ "text" and payload ≟ bindings.down) then return "select-next" end
+    if kind ≟ "up" or (kind ≟ "text" and payload ≟ bindings.up) then return "select-previous" end
+    if kind ≟ "page-down" then return "page-next" end
+    if kind ≟ "page-up" then return "page-previous" end
+    if kind ≟ "text" and payload ≟ bindings.quit then return "quit" end
+    if kind ≟ "text" and payload ≟ bindings.view then return "choose-view" end
+    return "no-change"
+end
+
+function icurses_new()
+    return {
+        items ← {
+            {label ← "Tuğba", value ← "12"},
+            {label ← "İstanbul", value ← "24"},
+            {label ← "é — combining", value ← "36"},
+            {label ← "界 — wide", value ← "48"}
+        },
+        selected ← 1, first ← 1, detailed ← true, remainder ← "", updates ← 0, running ← true
+    }
+end
+
+local function ordinary_updates_to_application(state, bytes)
+    -- TSV: positive row number, literal UTF-8 label, value, newline.
+    -- No evaluation of producer text, and no terminal controls in the text path.
+    if #state.remainder + #bytes > 16384 then
+        state.remainder ← ""
+        state.message ← "Update rejected: line buffer limit"
+        return
+    end
+    state.remainder ← state.remainder .. bytes
+    while true do
+        local ending ← state.remainder:find("\n", 1, true)
+        if not ending then break end
+        local line ← state.remainder:sub(1, ending - 1)
+        state.remainder ← state.remainder:sub(ending + 1)
+        local row, label, value ← line:match("^(%d+)\t([^\t]*)\t([^\t]*)$")
+        row ← tonumber(row)
+        if row and row >= 1 and row <= 128 and #label <= 512 and #value <= 128 then
+            for index ← #state.items + 1, row do
+                state.items[index] ← {label ← "", value ← ""}
+            end
+            state.items[row] ← {label ← label, value ← value}
+            state.updates ← state.updates + 1
+        else state.message ← "Update rejected: expected row<TAB>label<TAB>value" end
+    end
+end
+
+function icurses_event(state, kind, payload, width, height)
+    local command ← named_application_command(kind, payload)
+    local page ← math.max(1, height - 4)
+    if command ≟ "update-data" then ordinary_updates_to_application(state, payload) end
+    if command ≟ "select-next" then state.selected ← math.min(#state.items, state.selected + 1) end
+    if command ≟ "select-previous" then state.selected ← math.max(1, state.selected - 1) end
+    if command ≟ "page-next" then state.selected ← math.min(#state.items, state.selected + page) end
+    if command ≟ "page-previous" then state.selected ← math.max(1, state.selected - page) end
+    if command ≟ "choose-view" then state.detailed ← not state.detailed end
+    if command ≟ "quit" then state.running ← false end
+    if state.selected < state.first then state.first ← state.selected end
+    if state.selected >= state.first + page then state.first ← state.selected - page + 1 end
+    return command ≠ "no-change"
+end
+
+function icurses_presentation(state, width, height)
+    local requests ← {}
+    local function line(row, text, selected, column)
+        if row < height then
+            requests[#requests + 1] ← {
+                row ← row, column ← column or 0, text ← text,
+                foreground ← selected and 0 or 7,
+                background ← selected and 6 or 0,
+                bold ← selected and 1 or 0
+            }
+        end
+    end
+    line(0, "iCurses live table · " .. tostring(state.updates) .. " updates", false)
+    local page ← math.max(1, height - 4)
+    for index ← state.first, math.min(#state.items, state.first + page - 1) do
+        local item ← state.items[index]
+        local row ← index - state.first + 1
+        local selected ← index ≟ state.selected
+        if state.detailed then
+            line(row, string.format("%3d", index), selected)
+            line(row, item.label, selected, 5)
+            line(row, item.value, selected, math.max(5, width - 8))
+        else line(row, item.label, selected) end
+    end
+    line(height - 2, "Selected: " .. state.items[state.selected].label, false)
+    line(height - 1, state.message or ("↑/↓ " .. bindings.up .. "/" .. bindings.down ..
+         " select · " .. bindings.view .. " view · " .. bindings.quit .. " quit"), false)
+    -- Cursor is a presentation request as well; C clips and encodes it.
+    return requests, math.min(height - 1, state.selected - state.first + 1), 0, state.running
+end

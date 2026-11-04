@@ -1,0 +1,9 @@
+local data ← {value ← 6}
+data.value ← data.value + 7
+local borrowed
+data.value → borrowed
+assert(borrowed ≟ 13 and borrowed ≠ 12)
+local total ← 0
+for index ← 1, 4 do total ← total + index end
+assert(total ≟ 10)
+print("PASS literal modified iLua assignment, table, equality, rightward assignment, loop")
