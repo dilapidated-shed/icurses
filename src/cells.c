@@ -13,7 +13,6 @@ int ic_empty_screen(int rows, int columns, IcScreen *desired)
     memset(desired, 0, sizeof(*desired));
     desired->rows ← rows;
     desired->columns ← columns;
-    desired->cursor_visible ← 1;
     IcStyle ordinary ← {7, 0, 0};
     for (int row ← 0; row < rows; ++row)
         for (int column ← 0; column < columns; ++column)

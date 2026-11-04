@@ -43,6 +43,26 @@ static int modes_equal(struct termios first, struct termios second)
         first.c_cflag == second.c_cflag && first.c_lflag == second.c_lflag &&
         !memcmp(first.c_cc,second.c_cc,sizeof(first.c_cc));
 }
+static long process_cpu_ticks(pid_t process)
+{
+    char path[80], record[4096];
+    snprintf(path,sizeof(path),"/proc/%ld/stat",(long)process);
+    FILE *file ← fopen(path,"r");
+    REQUIRE(file && fgets(record,sizeof(record),file));
+    REQUIRE(!fclose(file));
+    char *fields ← strrchr(record,')');
+    REQUIRE(fields);
+    char *saved ← NULL;
+    char *token ← strtok_r(fields+2," ",&saved);
+    long user ← -1, system ← -1;
+    for (int field ← 3; token; ++field) {
+        if (field == 14) user ← strtol(token,NULL,10);
+        if (field == 15) { system ← strtol(token,NULL,10); break; }
+        token ← strtok_r(NULL," ",&saved);
+    }
+    REQUIRE(user >= 0 && system >= 0);
+    return user+system;
+}
 static void run_application(const char *binary, const char *policy, const char *down, int interrupted)
 {
     int master,slave,updates[2];
@@ -73,8 +93,10 @@ static void run_application(const char *binary, const char *policy, const char *
     long startup ← ic_monotonic_ms()-start;
     while (collect(master,10)) {}
     reset_capture();
+    long idle_cpu_start ← process_cpu_ticks(process);
     int64_t idle_start ← ic_monotonic_ms();
     while (ic_monotonic_ms()-idle_start < 1000) REQUIRE(collect(master,50) == 0);
+    long idle_cpu_ticks ← process_cpu_ticks(process)-idle_cpu_start;
     REQUIRE(write(master,down,1) == 1);
     long input_latency ← until_text(master,"İstanbul");
     while (collect(master,10)) {}
@@ -98,16 +120,50 @@ static void run_application(const char *binary, const char *policy, const char *
     REQUIRE(strstr(captured,"\0338"));
     long cpu_us ← usage.ru_utime.tv_sec × 1000000+usage.ru_utime.tv_usec+
                   usage.ru_stime.tv_sec × 1000000+usage.ru_stime.tv_usec;
-    printf("PASS application policy=%s exit=%s startup_ms=%ld input_visible_ms=%ld pipe_visible_ms=%ld total_cpu_us=%ld idle_wall_ms=1000 idle_emitted_bytes=0\n",
-           policy,interrupted ? "SIGTERM" : "command",startup,input_latency,pipe_latency,cpu_us);
+    printf("PASS application policy=%s exit=%s startup_ms=%ld input_visible_ms=%ld pipe_visible_ms=%ld total_cpu_us=%ld idle_wall_ms=1000 idle_cpu_ticks=%ld ticks_per_second=%ld idle_emitted_bytes=0\n",
+           policy,interrupted ? "SIGTERM" : "command",startup,input_latency,pipe_latency,cpu_us,idle_cpu_ticks,sysconf(_SC_CLK_TCK));
     const char *statistics ← strstr(captured,"frames=");
     if (statistics) printf("%s\n",statistics);
     close(master); close(slave); close(updates[1]);
 }
+static void run_live(const char *launcher, const char *binary, const char *policy)
+{
+    int master,slave;
+    struct winsize size ← {.ws_row ← 12, .ws_col ← 70};
+    REQUIRE(!openpty(&master,&slave,NULL,NULL,&size));
+    struct termios encountered, restored;
+    REQUIRE(!tcgetattr(slave,&encountered));
+    pid_t process ← fork();
+    REQUIRE(process >= 0);
+    if (!process) {
+        close(master);
+        REQUIRE(setsid() == getpid() && !ioctl(slave,TIOCSCTTY,0));
+        REQUIRE(!tcsetpgrp(slave,getpgrp()));
+        REQUIRE(dup2(slave,0) == 0 && dup2(slave,1) == 1 && dup2(slave,2) == 2);
+        if (slave > 2) close(slave);
+        execl(launcher,launcher,binary,policy,(char *)NULL);
+        _exit(127);
+    }
+    REQUIRE(fcntl(master,F_SETFL,O_NONBLOCK) == 0);
+    reset_capture();
+    until_text(master,"Selected: Tuğba");
+    while (collect(master,10)) {}
+    reset_capture();
+    REQUIRE(collect(master,1500) > 0);
+    REQUIRE(write(master,"q",1) == 1);
+    int status;
+    REQUIRE(waitpid(process,&status,0) == process && WIFEXITED(status) && !WEXITSTATUS(status));
+    REQUIRE(!tcgetattr(slave,&restored) && modes_equal(encountered,restored));
+    close(master); close(slave);
+    puts("PASS interactive launcher with a live external pipe producer");
+}
 int main(int argc,char **argv)
 {
-    REQUIRE(argc == 4);
     alarm(20);
+    if (argc == 5 && !strcmp(argv[1],"--live")) {
+        run_live(argv[2],argv[3],argv[4]); return 0;
+    }
+    REQUIRE(argc == 4);
     run_application(argv[1],argv[2],argv[3],0);
     run_application(argv[1],argv[2],argv[3],1);
     return 0;

@@ -26,7 +26,7 @@ typedef struct {
     unsigned char length, columns, foreground, background, bold;
 } IcCell;
 typedef struct {
-    int rows, columns, cursor_row, cursor_column, cursor_visible;
+    int rows, columns, cursor_row, cursor_column;
     IcCell cells[IC_ROWS][IC_COLS];
 } IcScreen;
 typedef struct { unsigned char foreground, background, bold; } IcStyle;

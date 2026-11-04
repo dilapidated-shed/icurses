@@ -6,6 +6,7 @@ runtime-controls: all bundle
 	test "$$(git -C "$(STOCK_LUA_SOURCE)" rev-parse HEAD)" = "$(STOCK_LUA_REVISION)"
 	mkdir -p "$(OUT)/stock-lua"
 	cp "$(STOCK_LUA_SOURCE)/"*.[ch] "$(OUT)/stock-lua/"
+	cp "$(STOCK_LUA_SOURCE)/makefile" "$(OUT)/stock-lua/makefile"
 	$(MAKE) -C "$(OUT)/stock-lua" -f "$(abspath $(STOCK_LUA_SOURCE))/makefile" CC="$(ICK) $(ICK_FLAGS)" MYCFLAGS="-std=c99 -DLUA_USE_POSIX" MYLDFLAGS= MYLIBS=-ldl liblua.a lua
 	! "$(OUT)/stock-lua/lua" tests/runtime.ilua > "$(OUT)/stock-lua.log" 2>&1
 	grep -E 'unexpected symbol|syntax error' "$(OUT)/stock-lua.log"

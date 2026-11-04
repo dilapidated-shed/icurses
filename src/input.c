@@ -52,7 +52,13 @@ IcDecodedEvent ic_received_bytes_to_event(IcReceivedBytes received, int escape_e
                           first >= 0xe0 && first <= 0xef ? 3 :
                           first >= 0xf0 && first <= 0xf4 ? 4 : 1;
         uint32_t point ← first & (length == 2 ? 31 : length == 3 ? 15 : 7);
-        if (length > received.count) return decoded;
+        if (length > received.count) {
+            int partial_valid ← length > 1;
+            for (size_t index ← 1; index < received.count; ++index)
+                if ((received.bytes[index] & 0xc0) != 0x80) partial_valid ← 0;
+            if (partial_valid) return decoded;
+            length ← 1;
+        }
         int valid ← length > 1;
         for (unsigned index ← 1; index < length; ++index) {
             if ((received.bytes[index] & 0xc0) != 0x80) valid ← 0;

@@ -79,6 +79,7 @@ ifeq ($(ANDROID_ABI),)
 $(OUT)/lua/liblua.a: | preflight
 	mkdir -p "$(OUT)/lua"
 	cp "$(LUA_SOURCE)/"*.[ch] "$(OUT)/lua/"
+	cp "$(LUA_SOURCE)/makefile" "$(OUT)/lua/makefile"
 	$(MAKE) -C "$(OUT)/lua" -f "$(abspath $(LUA_SOURCE))/makefile" CC="$(ICK) $(ICK_FLAGS)" MYCFLAGS="-std=c99 -DLUA_USE_POSIX" MYLDFLAGS= MYLIBS=-ldl liblua.a lua
 $(OUT)/ilua: $(OUT)/lua/liblua.a
 	cp "$(OUT)/lua/lua" "$@"
@@ -103,6 +104,7 @@ test: all profiles
 	"$(OUT)/icurses-demo" --identity
 	"$(OUT)/ilua" tests/runtime.ilua
 	"$(OUT)/test-demo" "$(abspath $(OUT))/icurses-demo" "$(abspath demo/table.ilua)" j
+	"$(OUT)/test-demo" --live "$(abspath $(OUT))/icurses-live" "$(abspath $(OUT))/icurses-demo" "$(abspath demo/table.ilua)"
 	$(MAKE) check-policy-edit
 profiles: | $(OUT)
 	"$(ICK)" $(ICK_FLAGS) $(CFLAGS) "$(AICI)/c-source/assignments.c" -o "$(OUT)/source-profile"
