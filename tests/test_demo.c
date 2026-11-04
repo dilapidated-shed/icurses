@@ -43,26 +43,6 @@ static int modes_equal(struct termios first, struct termios second)
         first.c_cflag == second.c_cflag && first.c_lflag == second.c_lflag &&
         !memcmp(first.c_cc,second.c_cc,sizeof(first.c_cc));
 }
-static long process_cpu_ticks(pid_t process)
-{
-    char path[80], record[4096];
-    snprintf(path,sizeof(path),"/proc/%ld/stat",(long)process);
-    FILE *file ← fopen(path,"r");
-    REQUIRE(file && fgets(record,sizeof(record),file));
-    REQUIRE(!fclose(file));
-    char *fields ← strrchr(record,')');
-    REQUIRE(fields);
-    char *saved ← NULL;
-    char *token ← strtok_r(fields+2," ",&saved);
-    long user ← -1, system ← -1;
-    for (int field ← 3; token; ++field) {
-        if (field == 14) user ← strtol(token,NULL,10);
-        if (field == 15) { system ← strtol(token,NULL,10); break; }
-        token ← strtok_r(NULL," ",&saved);
-    }
-    REQUIRE(user >= 0 && system >= 0);
-    return user+system;
-}
 static void run_application(const char *binary, const char *policy, const char *down, int interrupted)
 {
     int master,slave,updates[2];
@@ -93,10 +73,8 @@ static void run_application(const char *binary, const char *policy, const char *
     long startup ← ic_monotonic_ms()-start;
     while (collect(master,10)) {}
     reset_capture();
-    long idle_cpu_start ← process_cpu_ticks(process);
     int64_t idle_start ← ic_monotonic_ms();
     while (ic_monotonic_ms()-idle_start < 1000) REQUIRE(collect(master,50) == 0);
-    long idle_cpu_ticks ← process_cpu_ticks(process)-idle_cpu_start;
     REQUIRE(write(master,down,1) == 1);
     long input_latency ← until_text(master,"İstanbul");
     while (collect(master,10)) {}
@@ -120,10 +98,22 @@ static void run_application(const char *binary, const char *policy, const char *
     REQUIRE(strstr(captured,"\0338"));
     long cpu_us ← usage.ru_utime.tv_sec × 1000000+usage.ru_utime.tv_usec+
                   usage.ru_stime.tv_sec × 1000000+usage.ru_stime.tv_usec;
-    printf("PASS application policy=%s exit=%s startup_ms=%ld input_visible_ms=%ld pipe_visible_ms=%ld total_cpu_us=%ld idle_wall_ms=1000 idle_cpu_ticks=%ld ticks_per_second=%ld idle_emitted_bytes=0\n",
-           policy,interrupted ? "SIGTERM" : "command",startup,input_latency,pipe_latency,cpu_us,idle_cpu_ticks,sysconf(_SC_CLK_TCK));
+    printf("PASS application policy=%s exit=%s startup_ms=%ld input_visible_ms=%ld pipe_visible_ms=%ld total_cpu_us=%ld idle_emitted_bytes=0\n",
+           policy,interrupted ? "SIGTERM" : "command",startup,input_latency,pipe_latency,cpu_us);
     const char *statistics ← strstr(captured,"frames=");
-    if (statistics) printf("%s\n",statistics);
+    REQUIRE(statistics);
+    size_t frames, bytes, allocations, peak, idle_allocations;
+    long long idle_wall, idle_cpu;
+    REQUIRE(sscanf(statistics,"frames=%zu emitted_bytes=%zu lua_allocation_calls=%zu lua_peak_bytes=%zu idle_wall_ms=%lld idle_cpu_us=%lld idle_allocations=%zu",
+        &frames,&bytes,&allocations,&peak,&idle_wall,&idle_cpu,&idle_allocations) == 7);
+    REQUIRE(idle_wall >= 900 && idle_cpu >= 0 && idle_allocations == 0);
+#if !defined(__ANDROID__)
+    /* Bounds are derived in docs/MEASUREMENTS.md; Android earns its own baseline. */
+    REQUIRE(input_latency <= 32 && pipe_latency <= 32);
+    REQUIRE(idle_cpu × 1000 <= idle_wall × 4000);
+    REQUIRE(frames <= 4 && bytes <= 4096 && allocations <= 1024 && peak <= 65536);
+#endif
+    printf("%s\n",statistics);
     close(master); close(slave); close(updates[1]);
 }
 static void run_live(const char *launcher, const char *binary, const char *policy)

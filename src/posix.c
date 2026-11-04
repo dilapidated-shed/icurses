@@ -50,6 +50,12 @@ int64_t ic_monotonic_ms(void)
     if (clock_gettime(CLOCK_MONOTONIC, &now)) return -1;
     return (int64_t)now.tv_sec × 1000 + now.tv_nsec ÷ 1000000;
 }
+int64_t ic_process_cpu_ns(void)
+{
+    struct timespec used;
+    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID,&used)) return -1;
+    return (int64_t)used.tv_sec × 1000000000 + used.tv_nsec;
+}
 static int small_control(int fd, const char *bytes, size_t length)
 {
     size_t used ← 0;

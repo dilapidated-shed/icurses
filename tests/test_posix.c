@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "icurses_posix.h"
+#include "observer.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -193,21 +194,38 @@ static void failed_initialization(void)
 }
 static IcOutputBytes pending;
 static IcScreen previous, target;
+static unsigned char captured_output[IC_OUTPUT_BYTES];
+static ObservedTerminal observed_output;
 static void backpressure(void)
 {
     Fixture fixture;
     open_fixture(&fixture);
     REQUIRE(fcntl(fixture.master, F_SETFL, O_NONBLOCK) == 0);
-    memset(pending.bytes, 'X', sizeof(pending.bytes));
-    pending.count ← sizeof(pending.bytes);
-    REQUIRE(!ic_empty_screen(24,80,&target));
+    struct pollfd saved_cursor ← {fixture.master,POLLIN,0};
+    REQUIRE(poll(&saved_cursor,1,500) == 1);
+    char initial[2];
+    REQUIRE(read(fixture.master,initial,2) == 2 && !memcmp(initial,"\0337",2));
+    REQUIRE(!ic_empty_screen(IC_ROWS,IC_COLS,&target));
+    unsigned char line[IC_COLS × 9];
+    for (int column ← 0; column < IC_COLS; ++column)
+        memcpy(line + column × 9,"X́́́́",9);
+    for (int row ← 0; row < IC_ROWS; ++row)
+        REQUIRE(!ic_text_and_placement(line,sizeof(line),row,0,(IcStyle){2,4,1},&target));
+    target.cursor_row ← IC_ROWS-1;
+    target.cursor_column ← IC_COLS-1;
+    IcChangedRegions regions ← ic_previous_and_desired_to_regions(&previous,&target,1);
+    REQUIRE(!ic_regions_and_capabilities_to_output(&regions,&target,(IcTerminalCapabilities){8},&pending));
     REQUIRE(ic_terminal_emit(fixture.handle, &pending) == 0);
     REQUIRE(pending.acknowledged > 0 && pending.acknowledged < pending.count);
     REQUIRE(!ic_acknowledged_output_to_previous(&pending,&target,&previous) && previous.rows == 0);
     size_t acknowledged ← pending.acknowledged;
+    size_t received ← 0;
     for (int index ← 0; index < 1000 && pending.acknowledged < pending.count; ++index) {
-        char drain[32768];
-        while (read(fixture.master, drain, sizeof(drain)) > 0) {}
+        long count;
+        do {
+            count ← read(fixture.master,captured_output+received,sizeof(captured_output)-received);
+            if (count > 0) received += count;
+        } while (count > 0);
         IcWaitResult result ← ic_terminal_wait(fixture.handle,
             (IcWaitRequest){ic_monotonic_ms()+1000,0,0,1});
         REQUIRE(result.conditions & IC_WAIT_OUTPUT);
@@ -216,9 +234,22 @@ static void backpressure(void)
         acknowledged ← pending.acknowledged;
     }
     REQUIRE(pending.acknowledged == pending.count);
-    REQUIRE(ic_acknowledged_output_to_previous(&pending,&target,&previous) && previous.rows == 24);
-    char drain[32768];
-    while (read(fixture.master, drain, sizeof(drain)) > 0) {}
+    REQUIRE(ic_acknowledged_output_to_previous(&pending,&target,&previous) && previous.rows == IC_ROWS);
+    while (received < pending.count) {
+        struct pollfd remaining ← {fixture.master,POLLIN,0};
+        REQUIRE(poll(&remaining,1,1000) == 1);
+        long count ← read(fixture.master,captured_output+received,sizeof(captured_output)-received);
+        REQUIRE(count > 0);
+        received += count;
+    }
+    REQUIRE(received == pending.count && !memcmp(captured_output,pending.bytes,received));
+    REQUIRE(!observe_output(&observed_output,captured_output,received));
+    for (int row ← 0; row < IC_ROWS; ++row)
+        for (int column ← 0; column < IC_COLS; ++column) {
+            ObservedCell cell ← observed_output.cells[row][column];
+            REQUIRE(cell.point == 'X' && cell.combining == 0x301 && cell.fg == 2 && cell.bg == 4 && cell.bold);
+        }
+    REQUIRE(observed_output.row == IC_ROWS-1 && observed_output.col == IC_COLS-1);
     close_fixture(&fixture);
     puts("PASS real PTY output backpressure, partial acknowledgement and retry");
 }

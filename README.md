@@ -1,6 +1,24 @@
 # icurses
 
-Terminal-library source study.
+Terminal mechanisms in functorial Icky C, with an application policy in the
+user's modified iLua. Imported source studies remain intact below.
+
+The maintained implementation is under `include/` and `src/`. The live table
+application under `demo/` handles selection, scrolling, external pipe updates,
+Unicode labels and resizing. C owns decoding, placement, comparison and
+transactional output; iLua owns data, commands, bindings and presentation.
+
+- [Ownership and transformation chain](docs/OWNERSHIP.md)
+- [Terminal and Unicode limits](docs/LIMITS.md)
+- [Runtime instructions](docs/RUNNING.md)
+- [Measured workload and regression bounds](docs/MEASUREMENTS.md)
+- [Starting work and provenance](docs/PROVENANCE.md)
+
+Build through the pinned shared ICK producer and the fixed Make interface;
+`build.grease` exposes that interface for an actual Grease runtime. There is
+no stock-C acceptance path. Android compilation uses literal Icky source in
+ICK, followed by separately declared NDK assembly/link stages. Physical MIRO
+C67 acceptance remains separate from Android emulator execution.
 
 ## Imported source
 

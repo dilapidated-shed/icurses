@@ -1,2 +1,6 @@
 build_id	target	toolchain	ick_revision	ick_status	ick_evidence
 terminal-host	x86_64-linux-glibc	ick	fbe86e23d55cfec2000c08e61deea2a407fd7175	qualified	https://github.com/isomorphisms/ai-ci/blob/a66e3a9bb1070a338f8c4a67f9b4b4ac39dfb5ec/ick-host/README.md
+terminal-android-x86-frontend	x86_64-android26	ick	fbe86e23d55cfec2000c08e61deea2a407fd7175	qualified	https://github.com/isomorphisms/ai-ci/blob/a66e3a9bb1070a338f8c4a67f9b4b4ac39dfb5ec/ick-android/README.md
+terminal-android-arm64-frontend	arm64-v8a-android26	ick	fbe86e23d55cfec2000c08e61deea2a407fd7175	qualified	https://github.com/isomorphisms/ai-ci/blob/a66e3a9bb1070a338f8c4a67f9b4b4ac39dfb5ec/ick-android/README.md
+terminal-android-x86-platform	x86_64-android26	ndk	fbe86e23d55cfec2000c08e61deea2a407fd7175	gap:android-platform-assembler-and-link-driver	https://github.com/isomorphisms/ai-ci/blob/a66e3a9bb1070a338f8c4a67f9b4b4ac39dfb5ec/ick-android/README.md
+terminal-android-arm64-platform	arm64-v8a-android26	ndk	fbe86e23d55cfec2000c08e61deea2a407fd7175	gap:android-platform-assembler-and-link-driver	https://github.com/isomorphisms/ai-ci/blob/a66e3a9bb1070a338f8c4a67f9b4b4ac39dfb5ec/ick-android/README.md

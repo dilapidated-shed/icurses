@@ -1,0 +1,5 @@
+component	repository	revision	role
+icky-frontend	dilapidated-shed/ick	fbe86e23d55cfec2000c08e61deea2a407fd7175	literal-c-frontend
+ilua	isomorphisms/lua	87306483cec50f8c750a22dda1d0742246fad756	embedded-and-standalone-runtime
+aici-contracts	isomorphisms/ai-ci	a66e3a9bb1070a338f8c4a67f9b4b4ac39dfb5ec	source-profile-and-build-toolchain
+aici-compiler-producer	isomorphisms/ai-ci	618223d47315a180851c1539197cdcdb761a4b0d	qualified-dependency-checkpoint

@@ -78,7 +78,7 @@ end
 function icurses_presentation(state, width, height)
     local requests ← {}
     local function line(row, text, selected, column)
-        if row < height then
+        if row >= 0 and row < height then
             requests[#requests + 1] ← {
                 row ← row, column ← column or 0, text ← text,
                 foreground ← selected and 0 or 7,

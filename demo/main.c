@@ -160,6 +160,8 @@ int main(int argc, char **argv)
     int dirty ← 1, invalidated ← 1, running ← 1;
     int64_t escape_deadline ← -1;
     size_t emitted_bytes ← 0, frames ← 0;
+    int64_t idle_wall_ms ← 0, idle_cpu_ns ← 0;
+    size_t idle_allocations ← 0;
     for (;;) {
         if (output->acknowledged == output->count && dirty) {
             if (presentation_to_desired(runtime,application,columns,rows,target,&running)) goto cleanup;
@@ -181,7 +183,18 @@ int main(int argc, char **argv)
         if (peek.needs_escape_deadline && escape_deadline < 0) escape_deadline ← now + 35;
         IcWaitRequest request ← {escape_deadline,peek.available,0,output->acknowledged < output->count};
         if (dirty && !request.output_pending) request.deadline_ms ← now;
+        int64_t wait_wall_start ← ic_monotonic_ms();
+        int64_t wait_cpu_start ← ic_process_cpu_ns();
+        size_t allocations_before_wait ← allocations.calls;
         IcWaitResult ready ← ic_terminal_wait(terminal,request);
+        int64_t wait_cpu_end ← ic_process_cpu_ns();
+        int64_t wait_elapsed ← ic_monotonic_ms()-wait_wall_start;
+        if (wait_cpu_start < 0 || wait_cpu_end < 0) goto cleanup;
+        if (wait_elapsed >= 500) {
+            idle_wall_ms += wait_elapsed;
+            idle_cpu_ns += wait_cpu_end-wait_cpu_start;
+            idle_allocations += allocations.calls-allocations_before_wait;
+        }
         if (ready.conditions & IC_WAIT_FAILURE) { errno ← ready.error_number; goto cleanup; }
         if (ready.conditions & IC_WAIT_INTERRUPT) break;
         if (ready.conditions & IC_WAIT_RESIZE) {
@@ -221,8 +234,9 @@ int main(int argc, char **argv)
             dirty |= changed;
         }
     }
-    fprintf(stderr,"frames=%zu emitted_bytes=%zu lua_allocation_calls=%zu lua_peak_bytes=%zu\n",
-        frames,emitted_bytes,allocations.calls,allocations.peak);
+    fprintf(stderr,"frames=%zu emitted_bytes=%zu lua_allocation_calls=%zu lua_peak_bytes=%zu idle_wall_ms=%lld idle_cpu_us=%lld idle_allocations=%zu\n",
+        frames,emitted_bytes,allocations.calls,allocations.peak,(long long)idle_wall_ms,
+        (long long)(idle_cpu_ns ÷ 1000),idle_allocations);
     status ← 0;
 cleanup:
     if (ic_terminal_release(terminal)) { fprintf(stderr,"Restoration: %s (%d)\n",strerror(errno),errno); status ← 1; }

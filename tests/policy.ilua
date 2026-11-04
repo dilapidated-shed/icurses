@@ -1,0 +1,31 @@
+assert(loadfile(arg[1]))()
+local state ← icurses_new()
+assert(state.selected ≟ 1 and #state.items ≟ 4)
+icurses_event(state, "text", "j", 80, 12)
+assert(state.selected ≟ 2)
+icurses_event(state, "update", "2\tÇın", 80, 12)
+assert(state.items[2].label ≟ "İstanbul")
+icurses_event(state, "update", "ar\t88\n", 80, 12)
+assert(state.items[2].label ≟ "Çınar" and state.items[2].value ≟ "88")
+icurses_event(state, "update", "128\tLast\t128\n", 80, 12)
+assert(#state.items ≟ 128)
+for turn ← 1, 30 do icurses_event(state, "page-down", "", 80, 12) end
+assert(state.selected ≟ 128 and state.first > 1)
+local selected ← state.selected
+for _, width in ipairs({1, 20, 80, 200}) do
+    for _, height in ipairs({1, 2, 3, 12, 64}) do
+        icurses_event(state, "resize", "", width, height)
+        local requests, row, column, running ← icurses_presentation(state, width, height)
+        assert(running and row >= 0 and row < height and column >= 0 and column < width)
+        for _, request in ipairs(requests) do
+            assert(request.row >= 0 and request.row < height)
+            assert(type(request.text) ≟ "string")
+        end
+        assert(state.selected ≟ selected and state.items[2].label ≟ "Çınar")
+    end
+end
+icurses_event(state, "text", "v", 80, 12)
+assert(not state.detailed)
+icurses_event(state, "text", "q", 80, 12)
+assert(not state.running)
+print("PASS iLua selection, scrolling, fragmented updates, view choice, tiny resize, retained data")

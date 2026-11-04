@@ -13,7 +13,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - uses: isomorphisms/ai-ci/ick-host@a66e3a9bb1070a338f8c4a67f9b4b4ac39dfb5ec
+      - uses: isomorphisms/ai-ci/ick-host@618223d47315a180851c1539197cdcdb761a4b0d
         id: ick
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -28,13 +28,7 @@ jobs:
           path: .aici
           persist-credentials: false
       - name: Record compiler identity
-        run: make -f ci/bootstrap.mk identity archive ICK="${{ steps.ick.outputs.compiler }}"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: icurses-qualified-host-compiler
-          path: out/qualified-compiler.tar.gz
-          retention-days: 7
-          if-no-files-found: error
+        run: make -f ci/bootstrap.mk identity ICK="${{ steps.ick.outputs.compiler }}"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: isomorphisms/lua
@@ -78,7 +72,7 @@ jobs:
           ref: a66e3a9bb1070a338f8c4a67f9b4b4ac39dfb5ec
           path: .aici
           persist-credentials: false
-      - uses: isomorphisms/ai-ci/ick-android@a66e3a9bb1070a338f8c4a67f9b4b4ac39dfb5ec
+      - uses: isomorphisms/ai-ci/ick-android@618223d47315a180851c1539197cdcdb761a4b0d
         id: ick
         with:
           abi: ${{ matrix.abi }}
@@ -106,4 +100,6 @@ jobs:
             out/${{ matrix.abi }}/icurses-runtime.tar.gz.sha256
             out/${{ matrix.abi }}/*.sha256
             out/${{ matrix.abi }}/emulator-*.txt
+            out/${{ matrix.abi }}/android-elf.txt
+            out/${{ matrix.abi }}/build-receipt.tsv
           if-no-files-found: error
