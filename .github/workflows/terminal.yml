@@ -1,0 +1,27 @@
+name: iCurses exact-source acceptance
+on:
+  push:
+    branches: [implement-icky-c-ilua]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  host:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: isomorphisms/ai-ci/ick-host@a66e3a9bb1070a338f8c4a67f9b4b4ac39dfb5ec
+        id: ick
+      - name: Record compiler identity
+        run: make -f ci/bootstrap.mk identity ICK="${{ steps.ick.outputs.compiler }}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: icurses-qualified-host-compiler
+          path: ${{ runner.temp }}/ick-host-stage
+          retention-days: 7
+          if-no-files-found: error
