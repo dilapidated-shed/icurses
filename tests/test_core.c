@@ -32,6 +32,9 @@ static void decoder(void)
     ic_receive_bytes(&bytes, "\xf0\x80\x80\x80", 4);
     event ← ic_received_bytes_to_event(bytes, 0);
     REQUIRE(event.available && event.event.codepoint == 0xfffd && event.remaining.count == 3);
+    bytes.count ← sizeof(bytes.bytes)+1;
+    REQUIRE(ic_receive_bytes(&bytes,"x",1) == 0);
+    REQUIRE(ic_received_bytes_to_event(bytes,0).invalid_buffer);
 }
 static void rendering(void)
 {
@@ -80,6 +83,14 @@ static void rendering(void)
     REQUIRE(!ic_acknowledged_output_to_previous(&output, &desired, &previous));
     REQUIRE(!memcmp(&committed, &previous, sizeof(previous)));
     REQUIRE(ic_empty_screen(0, 12, &desired) == -1);
+    REQUIRE(!ic_empty_screen(1,12,&desired));
+    REQUIRE(!ic_text_and_placement("x",1,0,INT32_MAX,highlighted,&desired));
+    REQUIRE(!ic_text_and_placement("x",1,0,INT32_MIN,highlighted,&desired));
+    REQUIRE(desired.cells[0][0].text[0] == ' ');
+    desired.rows ← IC_ROWS+1;
+    regions ← ic_previous_and_desired_to_regions(&previous,&desired,0);
+    REQUIRE(regions.invalid_screen);
+    REQUIRE(ic_regions_and_capabilities_to_output(&regions,&desired,(IcTerminalCapabilities){8},&output) == -1);
 }
 int main(void)
 {

@@ -168,16 +168,16 @@ static void failed_initialization(void)
     REQUIRE(!openpty(&master, &slave, NULL, NULL, NULL));
     struct termios encountered, restored;
     REQUIRE(!tcgetattr(slave, &encountered));
-    int full ← open("/dev/full", O_WRONLY);
-    REQUIRE(full >= 0);
+    int unwritable[2];
+    REQUIRE(!pipe(unwritable));
     IcTerminalHandle handle;
-    REQUIRE(ic_terminal_acquire(slave, full, -1, &handle) == -1);
+    REQUIRE(ic_terminal_acquire(slave, unwritable[0], -1, &handle) == -1 && errno == EBADF);
     REQUIRE(!tcgetattr(slave, &restored));
     REQUIRE(same_modes(&encountered, &restored));
     REQUIRE(ic_terminal_acquire(slave, -1, -1, &handle) == -1);
     REQUIRE(!ic_terminal_acquire(slave, slave, -1, &handle));
     REQUIRE(!ic_terminal_release(handle));
-    close(full); close(master); close(slave);
+    close(unwritable[0]); close(unwritable[1]); close(master); close(slave);
     Fixture fixture;
     open_fixture(&fixture);
     close(fixture.pipe[0]);
@@ -191,6 +191,28 @@ static void failed_initialization(void)
     close(replacement[1]);
     close_fixture(&fixture);
     puts("PASS partial initialization failure, invalid source, borrowed descriptors");
+}
+static void broken_output(void)
+{
+    int master,slave,output_pipe[2];
+    REQUIRE(!openpty(&master,&slave,NULL,NULL,NULL) && !pipe(output_pipe));
+    struct termios encountered, restored;
+    struct sigaction encountered_pipe, restored_pipe;
+    REQUIRE(!tcgetattr(slave,&encountered));
+    REQUIRE(!sigaction(SIGPIPE,NULL,&encountered_pipe));
+    IcTerminalHandle handle;
+    REQUIRE(!ic_terminal_acquire(slave,output_pipe[1],-1,&handle));
+    close(output_pipe[0]);
+    IcOutputBytes *bytes ← calloc(1,sizeof(*bytes));
+    REQUIRE(bytes);
+    bytes->bytes[0] ← 'x'; bytes->count ← 1;
+    REQUIRE(ic_terminal_emit(handle,bytes) == -1 && errno == EPIPE);
+    REQUIRE(!bytes->acknowledged);
+    REQUIRE(ic_terminal_release(handle) == -1 && errno == EPIPE);
+    REQUIRE(!tcgetattr(slave,&restored) && same_modes(&encountered,&restored));
+    REQUIRE(!sigaction(SIGPIPE,NULL,&restored_pipe) && encountered_pipe.sa_handler == restored_pipe.sa_handler);
+    free(bytes); close(output_pipe[1]); close(master); close(slave);
+    puts("PASS broken output pipe restores input modes and signal disposition, reports failure");
 }
 static IcOutputBytes pending;
 static IcScreen previous, target;
@@ -297,6 +319,6 @@ int main(int argc, char **argv)
     alarm(20);
     if (argc == 2 && !strcmp(argv[1],"readiness")) { readiness(); return 0; }
     if (argc == 2 && !strcmp(argv[1],"restoration")) { failed_initialization(); return 0; }
-    readiness(); delayed_and_interrupted(); sustained(); failed_initialization(); backpressure(); real_resize();
+    readiness(); delayed_and_interrupted(); sustained(); failed_initialization(); broken_output(); backpressure(); real_resize();
     return 0;
 }

@@ -79,11 +79,14 @@ static int release_native(NativeTerminal *native)
     sigemptyset(&blocked);
     for (int index ← 0; index < 5; ++index) sigaddset(&blocked, handled_signals[index]);
     if (sigprocmask(SIG_BLOCK, &blocked, &encountered_mask)) return -1;
+    sigset_t pending_before_cleanup;
+    if (sigpending(&pending_before_cleanup)) {
+        int error_number ← errno;
+        sigprocmask(SIG_SETMASK,&encountered_mask,NULL);
+        errno ← error_number;
+        return -1;
+    }
     signal_output ← -1;
-    for (int index ← 0; index < native->handlers_installed; ++index)
-        if (sigaction(handled_signals[index], &native->encountered_actions[index], NULL)) {
-            failed ← 1; saved_error ← errno;
-        }
     if (native->cursor_saved && small_control(native->output, "\0338", 2)) {
         failed ← 1; saved_error ← errno;
     }
@@ -101,6 +104,21 @@ static int release_native(NativeTerminal *native)
     }
     if (native->wake[0] >= 0) close(native->wake[0]);
     if (native->wake[1] >= 0) close(native->wake[1]);
+    /* A failed cleanup write must not deliver a newly generated fatal SIGPIPE
+       after the caller's disposition is restored. Preserve preexisting signals. */
+    if (!sigismember(&pending_before_cleanup,SIGPIPE)) {
+        sigset_t pending_after_cleanup;
+        if (!sigpending(&pending_after_cleanup) && sigismember(&pending_after_cleanup,SIGPIPE)) {
+            sigset_t only_pipe;
+            sigemptyset(&only_pipe); sigaddset(&only_pipe,SIGPIPE);
+            struct timespec no_wait ← {0,0};
+            if (sigtimedwait(&only_pipe,NULL,&no_wait) != SIGPIPE) { failed ← 1; saved_error ← errno; }
+        }
+    }
+    for (int index ← 0; index < native->handlers_installed; ++index)
+        if (sigaction(handled_signals[index], &native->encountered_actions[index], NULL)) {
+            failed ← 1; saved_error ← errno;
+        }
     native->active ← 0;
     if (sigprocmask(SIG_SETMASK, &encountered_mask, NULL)) { failed ← 1; saved_error ← errno; }
     if (failed) errno ← saved_error;
@@ -111,9 +129,10 @@ int ic_terminal_acquire(int terminal_fd, int output_fd, int command_fd, IcTermin
     if (!handle || terminal_fd < 0 || output_fd < 0 || command_fd < -1 || command_fd == terminal_fd ||
         command_fd == output_fd) { errno ← EINVAL; return -1; }
     if (resource.active) { errno ← EBUSY; return -1; }
+    if (resource.generation == UINT_MAX) { errno ← EOVERFLOW; return -1; }
     unsigned next_generation ← resource.generation + 1;
     memset(&resource, 0, sizeof(resource));
-    resource.generation ← next_generation ? next_generation : 1;
+    resource.generation ← next_generation;
     resource.input ← terminal_fd;
     resource.output ← output_fd;
     resource.command ← command_fd;
@@ -170,7 +189,8 @@ int ic_terminal_release(IcTerminalHandle handle)
 int ic_terminal_dimensions(IcTerminalHandle handle, int *rows, int *columns)
 {
     NativeTerminal *native ← checked(handle);
-    if (!native || !rows || !columns) { errno ← EINVAL; return -1; }
+    if (!native) return -1;
+    if (!rows || !columns) { errno ← EINVAL; return -1; }
     struct winsize size;
     if (ioctl(native->input, TIOCGWINSZ, &size)) return -1;
     *rows ← size.ws_row ? size.ws_row : 24;
@@ -253,6 +273,9 @@ int ic_terminal_emit(IcTerminalHandle handle, IcOutputBytes *output)
 {
     NativeTerminal *native ← checked(handle);
     if (!native) return -1;
+    if (!output || output->count > sizeof(output->bytes) || output->acknowledged > output->count) {
+        errno ← EINVAL; return -1;
+    }
     if (output->acknowledged == output->count) return 1;
     ssize_t written ← write(native->output, output->bytes + output->acknowledged,
                             output->count - output->acknowledged);

@@ -6,6 +6,11 @@ IcChangedRegions ic_previous_and_desired_to_regions(const IcScreen *previous,
                                                     const IcScreen *desired, int invalidated)
 {
     IcChangedRegions regions ← {0};
+    if (!previous || !ic_screen_valid(desired) ||
+        (!ic_screen_valid(previous) && (previous->rows || previous->columns))) {
+        regions.invalid_screen ← 1;
+        return regions;
+    }
     int resized ← previous->rows != desired->rows || previous->columns != desired->columns;
     for (int row ← 0; row < desired->rows; ++row) {
         int first ← desired->columns;
@@ -46,15 +51,21 @@ static int position(IcOutputBytes *output, int row, int column)
 int ic_regions_and_capabilities_to_output(const IcChangedRegions *regions,
         const IcScreen *desired, IcTerminalCapabilities capabilities, IcOutputBytes *output)
 {
+    if (!output) return -1;
     output->count ← output->acknowledged ← 0;
-    if (capabilities.colors != 8 || desired->cursor_row < 0 || desired->cursor_row >= desired->rows ||
+    if (!regions || regions->invalid_screen || regions->count > IC_ROWS || !ic_screen_valid(desired) ||
+        capabilities.colors != 8 || desired->cursor_row < 0 || desired->cursor_row >= desired->rows ||
         desired->cursor_column < 0 || desired->cursor_column >= desired->columns) return -1;
     for (size_t index ← 0; index < regions->count; ++index) {
         IcChangedRegion changed ← regions->rows[index];
+        if (changed.row < 0 || changed.row >= desired->rows || changed.first < 0 ||
+            changed.past > desired->columns || changed.first > changed.past) return -1;
         if (position(output, changed.row, changed.first)) return -1;
         IcStyle emitted ← {255, 255, 255};
         for (int column ← changed.first; column < changed.past; ++column) {
             const IcCell *cell ← &desired->cells[changed.row][column];
+            if (cell->length > IC_TEXT_BYTES || cell->columns > 2 || cell->foreground > 7 ||
+                cell->background > 7 || cell->bold > 1) return -1;
             if (!cell->columns) continue;
             if (emitted.foreground != cell->foreground || emitted.background != cell->background ||
                 emitted.bold != cell->bold) {

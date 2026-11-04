@@ -32,7 +32,7 @@ static long until_text(int master, const char *text)
     int64_t start ← ic_monotonic_ms();
     int64_t deadline ← start+3000;
     while (!strstr(captured,text) && ic_monotonic_ms() < deadline) collect(master,30);
-    if (!strstr(captured,text)) fprintf(stderr,"Captured: %s\n",captured);
+    if (!strstr(captured,text)) fprintf(stderr,"Captured %zu bytes without expected text\n",captured_count);
     REQUIRE(strstr(captured,text));
     return ic_monotonic_ms()-start;
 }
@@ -87,7 +87,8 @@ static void run_application(const char *binary, const char *policy, const char *
     size.ws_row ← 17; size.ws_col ← 91;
     REQUIRE(!ioctl(master,TIOCSWINSZ,&size));
     until_text(master,"Selected: Çınar 界");
-    if (interrupted) REQUIRE(!kill(process,SIGTERM));
+    if (interrupted == 2) REQUIRE(write(master,"\003",1) == 1);
+    else if (interrupted) REQUIRE(!kill(process,SIGTERM));
     else REQUIRE(write(master,"q",1) == 1);
     int status;
     struct rusage usage;
@@ -98,8 +99,6 @@ static void run_application(const char *binary, const char *policy, const char *
     REQUIRE(strstr(captured,"\0338"));
     long cpu_us ← usage.ru_utime.tv_sec × 1000000+usage.ru_utime.tv_usec+
                   usage.ru_stime.tv_sec × 1000000+usage.ru_stime.tv_usec;
-    printf("PASS application policy=%s exit=%s startup_ms=%ld input_visible_ms=%ld pipe_visible_ms=%ld total_cpu_us=%ld idle_emitted_bytes=0\n",
-           policy,interrupted ? "SIGTERM" : "command",startup,input_latency,pipe_latency,cpu_us);
     const char *statistics ← strstr(captured,"frames=");
     REQUIRE(statistics);
     size_t frames, bytes, allocations, peak, idle_allocations;
@@ -107,13 +106,29 @@ static void run_application(const char *binary, const char *policy, const char *
     REQUIRE(sscanf(statistics,"frames=%zu emitted_bytes=%zu lua_allocation_calls=%zu lua_peak_bytes=%zu idle_wall_ms=%lld idle_cpu_us=%lld idle_allocations=%zu",
         &frames,&bytes,&allocations,&peak,&idle_wall,&idle_cpu,&idle_allocations) == 7);
     REQUIRE(idle_wall >= 900 && idle_cpu >= 0 && idle_allocations == 0);
-#if !defined(__ANDROID__)
-    /* Bounds are derived in docs/MEASUREMENTS.md; Android earns its own baseline. */
-    REQUIRE(input_latency <= 32 && pipe_latency <= 32);
-    REQUIRE(idle_cpu × 1000 <= idle_wall × 4000);
+    REQUIRE(strstr(statistics,"native_allocation_calls=3"));
     REQUIRE(frames <= 4 && bytes <= 4096 && allocations <= 1024 && peak <= 65536);
+    const char *profile ← getenv("IC_PERFORMANCE_PROFILE");
+#if !defined(__ANDROID__)
+    /* These timing bounds belong to the observed hosted runner, not every
+       machine sharing its instruction set. An absent profile is measurement only. */
+    if (profile) {
+        REQUIRE(!strcmp(profile,"github-ubuntu-24.04-x86_64"));
+        if (input_latency > 32 || pipe_latency > 32 || idle_cpu × 1000 > idle_wall × 4000)
+            fprintf(stderr,"Timing observation: input_ms=%ld pipe_ms=%ld idle_cpu_us=%lld idle_wall_ms=%lld\n",
+                input_latency,pipe_latency,idle_cpu,idle_wall);
+        REQUIRE(input_latency <= 32 && pipe_latency <= 32);
+        REQUIRE(idle_cpu × 1000 <= idle_wall × 4000);
+    }
+#else
+    REQUIRE(!profile); /* Establish the emulator's own measured profile first. */
 #endif
-    printf("%s\n",statistics);
+    printf("PASS application policy=%s exit=%s startup_ms=%ld input_visible_ms=%ld pipe_visible_ms=%ld total_cpu_us=%ld idle_emitted_bytes=0\n",
+           policy,interrupted == 2 ? "terminal-Ctrl-C" : interrupted ? "SIGTERM" : "command",startup,input_latency,pipe_latency,cpu_us);
+    const char *line_end ← strchr(statistics,'\n');
+    REQUIRE(line_end && line_end-statistics < 512);
+    printf("%.*s\n",(int)(line_end-statistics),statistics);
+    printf("timing_regression_profile=%s\n",profile ? profile : "NOT_RUN: measurement-only execution target");
     close(master); close(slave); close(updates[1]);
 }
 static void run_live(const char *launcher, const char *binary, const char *policy)
@@ -156,5 +171,6 @@ int main(int argc,char **argv)
     REQUIRE(argc == 4);
     run_application(argv[1],argv[2],argv[3],0);
     run_application(argv[1],argv[2],argv[3],1);
+    run_application(argv[1],argv[2],argv[3],2);
     return 0;
 }

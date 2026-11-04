@@ -30,6 +30,18 @@ static int report_lua(lua_State *runtime, const char *operation)
     fprintf(stderr,"iLua %s: %s\n", operation, lua_tostring(runtime,-1));
     return -1;
 }
+static void presentation_libraries(lua_State *runtime)
+{
+    static const struct { const char *name; lua_CFunction open; } libraries[] ← {
+        {"_G",luaopen_base}, {LUA_MATHLIBNAME,luaopen_math},
+        {LUA_STRLIBNAME,luaopen_string}, {LUA_TABLIBNAME,luaopen_table},
+        {LUA_UTF8LIBNAME,luaopen_utf8}
+    };
+    for (size_t index ← 0; index < sizeof(libraries) ÷ sizeof(libraries[0]); ++index) {
+        luaL_requiref(runtime,libraries[index].name,libraries[index].open,1);
+        lua_pop(runtime,1);
+    }
+}
 static int runtime_semantics(lua_State *runtime)
 {
     /* This literal source is evaluated by the library linked into this process. */
@@ -119,12 +131,22 @@ int main(int argc, char **argv)
     LuaAllocationAccount allocations ← {0};
     lua_State *runtime ← lua_newstate(accounted_allocation,&allocations,0);
     if (!runtime) return 1;
-    luaL_openlibs(runtime);
+    presentation_libraries(runtime);
     if (runtime_semantics(runtime)) { lua_close(runtime); return 2; }
     if (argc == 2 && !strcmp(argv[1],"--identity")) {
         printf("runtime_repository=isomorphisms/lua\nruntime_revision=%s\nsymbolic_semantics=PASS\n",IC_LUA_REVISION);
         lua_close(runtime); return 0;
     }
+    if (argc == 3 && !strcmp(argv[1],"--probe")) {
+        if (luaL_loadfile(runtime,argv[2]) || lua_pcall(runtime,0,0,0)) {
+            report_lua(runtime,"literal upstream semantic fixture"); lua_close(runtime); return 2;
+        }
+        lua_close(runtime); return 0;
+    }
+    /* All application output goes through presentation requests owned by C. */
+    lua_pushnil(runtime); lua_setglobal(runtime,"print");
+    lua_pushnil(runtime); lua_setglobal(runtime,"dofile");
+    lua_pushnil(runtime); lua_setglobal(runtime,"loadfile");
     if (argc < 2 || argc > 3) {
         fprintf(stderr,"Usage: icurses-demo POLICY.ilua [borrowed-command-fd]\n");
         lua_close(runtime); return 2;
@@ -180,6 +202,7 @@ int main(int argc, char **argv)
         }
         int64_t now ← ic_monotonic_ms();
         IcDecodedEvent peek ← ic_received_bytes_to_event(input,escape_deadline >= 0 && now >= escape_deadline);
+        if (peek.invalid_buffer) goto cleanup;
         if (peek.needs_escape_deadline && escape_deadline < 0) escape_deadline ← now + 35;
         IcWaitRequest request ← {escape_deadline,peek.available,0,output->acknowledged < output->count};
         if (dirty && !request.output_pending) request.deadline_ms ← now;
@@ -234,9 +257,9 @@ int main(int argc, char **argv)
             dirty |= changed;
         }
     }
-    fprintf(stderr,"frames=%zu emitted_bytes=%zu lua_allocation_calls=%zu lua_peak_bytes=%zu idle_wall_ms=%lld idle_cpu_us=%lld idle_allocations=%zu\n",
+    fprintf(stderr,"frames=%zu emitted_bytes=%zu lua_allocation_calls=%zu lua_peak_bytes=%zu idle_wall_ms=%lld idle_cpu_us=%lld idle_allocations=%zu native_allocation_calls=3 native_allocated_bytes=%zu\n",
         frames,emitted_bytes,allocations.calls,allocations.peak,(long long)idle_wall_ms,
-        (long long)(idle_cpu_ns ÷ 1000),idle_allocations);
+        (long long)(idle_cpu_ns ÷ 1000),idle_allocations,sizeof(*previous)+sizeof(*target)+sizeof(*output));
     status ← 0;
 cleanup:
     if (ic_terminal_release(terminal)) { fprintf(stderr,"Restoration: %s (%d)\n",strerror(errno),errno); status ← 1; }

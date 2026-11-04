@@ -41,6 +41,14 @@ a second acquisition fails with Device or resource busy (EBUSY). This is a
 declared signal-adapter limit. Lua receives neither a handle nor a descriptor.
 There is no native-resource lifetime for a Lua script to guess.
 
+The controlled application bridge opens only base, math, string, table and
+UTF-8 libraries. It omits OS, IO, package/native loading and debug access, and
+removes direct print/file-loading entry points before loading application
+policy. Presentation requests are the application's output path. The separate
+standalone interpreter and the explicit pre-terminal `--probe` mode remain
+runtime qualification tools. This is an ownership boundary, not an arbitrary
+untrusted-script sandbox.
+
 Wait results preserve independent condition bits for data, end, resize,
 interruption, deadline expiry and failure. A buffered event forces a zero-time
 kernel observation of every source rather than bypassing the command pipe.

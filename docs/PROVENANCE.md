@@ -44,3 +44,6 @@ consumer. The stock compiler invocation is deliberately a rejection control.
 language. It must be run by an actual Grease runtime; no Bash execution is
 claimed for it. Make recipes use the same fixed tool interface as the shared
 ICK producers and are not a new shell dialect or build framework.
+The existing shared runtime admission prerequisite remains
+[explicitly blocked](SHARED-ADMISSION-BLOCKER.md); local functional probes do
+not replace that owner's executable-identity contract.

@@ -9,6 +9,12 @@ on its PTY master; this is terminal-output visibility, not a physical display
 scanout or IME measurement. Millisecond readings may be zero due to clock
 resolution.
 
+The application accounts for every Lua allocator call and its live/peak bytes.
+Owned native frame/output storage makes three allocations once, with their
+exact byte total recorded; the C kernels allocate nothing per cell or frame.
+This is owned-allocation accounting, not an assertion about every internal
+allocation that a platform libc might perform.
+
 At exact source `f43c7043baee91c0915c678c90e193ef546cd475`, host job
 126782523852 in run 41889422129 passed all four application executions:
 
@@ -37,13 +43,28 @@ pipe latency, and the same four frames/3540 paint bytes. These development
 measurements include the subsequent instrumentation and will be superseded by
 the final exact-head CI logs; they are not attributed to the earlier commit.
 
-Native-host regression bounds use four times the largest observed key/pipe
+The `github-ubuntu-24.04-x86_64` regression profile uses four times the largest observed key/pipe
 latency, rounded up to 32 ms, and four times the largest measured idle CPU,
 rounded up to 4000 microseconds per second of idle. Deterministic workload
 ceilings round the observed allocation count, peak memory and paint bytes up
 to 1024 calls, 65536 bytes and 4096 paint bytes. Frames remain at most four;
 idle allocations and idle emitted bytes must remain zero. These are workload
 bounds, not universal performance guarantees.
+
+One later disposable-workspace invocation measured 83 ms key and 30 ms pipe
+latency while package construction ran concurrently. The 32 ms check failed;
+that failure is retained and the limit was not increased. A subsequent isolated
+run of the same executable measured 0–3 ms key and 0–1 ms pipe latency across
+normal, SIGTERM and actual terminal Ctrl-C exits. CI now finishes construction
+and substitution controls before running the measured workload, so the
+regression workload does not include concurrent compiler/packager work. The
+failure alone does not establish a lower-level cause for the delay.
+Further scratch-host runs also showed timing variation. Timing bounds are now
+selected by explicit execution-target profile: the hosted CI job requires the
+unchanged 32 ms / 4000 µs limits, while an unprofiled machine records timing and
+labels its timing regression check NOT_RUN. Shared architecture and OS alone
+do not qualify another execution target. Deterministic frame/byte/allocation
+limits and functional deadlines remain enforced everywhere.
 
 Android emulator performance is a separate target and initially records its
 measurements without inheriting native-host timing thresholds. Its measured

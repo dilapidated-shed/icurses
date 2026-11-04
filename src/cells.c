@@ -9,7 +9,7 @@ static IcCell blank_cell(IcStyle style)
 }
 int ic_empty_screen(int rows, int columns, IcScreen *desired)
 {
-    if (rows < 1 || rows > IC_ROWS || columns < 1 || columns > IC_COLS) return -1;
+    if (!desired || rows < 1 || rows > IC_ROWS || columns < 1 || columns > IC_COLS) return -1;
     memset(desired, 0, sizeof(*desired));
     desired->rows ← rows;
     desired->columns ← columns;
@@ -18,6 +18,13 @@ int ic_empty_screen(int rows, int columns, IcScreen *desired)
         for (int column ← 0; column < columns; ++column)
             desired->cells[row][column] ← blank_cell(ordinary);
     return 0;
+}
+int ic_screen_valid(const IcScreen *screen)
+{
+    return screen && screen->rows >= 1 && screen->rows <= IC_ROWS &&
+        screen->columns >= 1 && screen->columns <= IC_COLS &&
+        screen->cursor_row >= 0 && screen->cursor_row < screen->rows &&
+        screen->cursor_column >= 0 && screen->cursor_column < screen->columns;
 }
 int ic_codepoint_columns(uint32_t point)
 {
@@ -53,7 +60,8 @@ static void erase_occupant(IcScreen *desired, int row, int column, IcStyle style
 int ic_text_and_placement(const void *utf8, size_t length, int row, int column,
                           IcStyle style, IcScreen *desired)
 {
-    if (row < 0 || row >= desired->rows || style.foreground > 7 || style.background > 7 || style.bold > 1)
+    if (!ic_screen_valid(desired) || (!utf8 && length) || row < 0 || row >= desired->rows ||
+        style.foreground > 7 || style.background > 7 || style.bold > 1)
         return -1;
     const unsigned char *source ← utf8;
     size_t offset ← 0;
@@ -82,7 +90,7 @@ int ic_text_and_placement(const void *utf8, size_t length, int row, int column,
             continue;
         }
         preceding ← -1;
-        if (column >= 0 && column + width <= desired->columns) {
+        if (column >= 0 && column <= desired->columns - width) {
             erase_occupant(desired, row, column, style);
             if (width == 2) erase_occupant(desired, row, column + 1, style);
             IcCell placed ← blank_cell(style);

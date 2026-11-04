@@ -38,8 +38,8 @@ endif
 LUA_NAMES = lapi lcode lctype ldebug ldo ldump lfunc lgc llex lmem lobject lopcodes lparser lstate lstring ltable ltm lundump lvm lzio ltests lauxlib lbaselib ldblib liolib lmathlib loslib ltablib lstrlib lutf8lib loadlib lcorolib linit
 LUA_OBJECTS = $(addprefix $(OUT)/lua-obj/,$(addsuffix .o,$(LUA_NAMES)))
 
-.PHONY: all preflight test profiles bundle mutants check-policy-edit
-all: preflight $(OUT)/test-core $(OUT)/test-posix $(OUT)/test-demo $(OUT)/icurses-demo $(OUT)/icurses-live $(OUT)/ilua
+.PHONY: all preflight test test-c test-application profiles bundle mutants check-policy-edit
+all: preflight $(OUT)/libicurses.a $(OUT)/test-core $(OUT)/test-posix $(OUT)/test-demo $(OUT)/icurses-demo $(OUT)/icurses-live $(OUT)/ilua
 preflight:
 	test -x "$(ICK)"
 	test "$$(git -C "$(LUA_SOURCE)" rev-parse HEAD)" = "$(LUA_REVISION)"
@@ -70,11 +70,13 @@ else
 	"$(ICK)" $(PLATFORM_FLAGS) $(CPPFLAGS) $(CFLAGS) -S "$<" -o "$(@:.o=.s)"
 	"$(LINKER)" $(TARGET_FLAGS) -c "$(@:.o=.s)" -o "$@"
 endif
-$(OUT)/test-core: $(addprefix $(OUT)/obj/,src/input.o src/cells.o src/output.o tests/test_core.o tests/observer.o)
+$(OUT)/libicurses.a: $(CORE_OBJECTS)
+	"$(AR_TOOL)" rcs "$@" $^
+$(OUT)/test-core: $(addprefix $(OUT)/obj/,tests/test_core.o tests/observer.o) $(OUT)/libicurses.a
 	"$(LINKER)" $(LINK_FLAGS) $^ $(LDLIBS) -o "$@"
-$(OUT)/test-posix: $(CORE_OBJECTS) $(OUT)/obj/tests/test_posix.o $(OUT)/obj/tests/observer.o
+$(OUT)/test-posix: $(OUT)/obj/tests/test_posix.o $(OUT)/obj/tests/observer.o $(OUT)/libicurses.a
 	"$(LINKER)" $(LINK_FLAGS) $^ $(LDLIBS) -o "$@"
-$(OUT)/test-demo: $(OUT)/obj/src/posix.o $(OUT)/obj/tests/test_demo.o
+$(OUT)/test-demo: $(OUT)/obj/tests/test_demo.o $(OUT)/libicurses.a
 	"$(LINKER)" $(LINK_FLAGS) $^ $(LDLIBS) -o "$@"
 ifeq ($(ANDROID_ABI),)
 $(OUT)/lua/liblua.a: | preflight
@@ -95,15 +97,25 @@ $(OUT)/lua/liblua.a: $(LUA_OBJECTS)
 $(OUT)/ilua: $(OUT)/lua-obj/lua.o $(OUT)/lua/liblua.a
 	"$(LINKER)" $(LINK_FLAGS) $^ $(LDLIBS) -o "$@"
 endif
-$(OUT)/icurses-demo: $(CORE_OBJECTS) $(OUT)/obj/demo/main.o $(OUT)/lua/liblua.a
-	"$(LINKER)" $(LINK_FLAGS) $^ $(LDLIBS) -o "$@"
+$(OUT)/icurses-demo: $(OUT)/obj/demo/main.o $(OUT)/libicurses.a $(OUT)/lua/liblua.a
+	"$(LINKER)" $(LINK_FLAGS) $^ -Wl,-Map,"$@.map" $(LDLIBS) -o "$@"
 $(OUT)/icurses-live: $(OUT)/obj/demo/live.o
 	"$(LINKER)" $(LINK_FLAGS) $^ $(LDLIBS) -o "$@"
-test: all profiles
+test-c: $(OUT)/test-core $(OUT)/test-posix
 	"$(OUT)/test-core"
 	"$(OUT)/test-posix"
+	sha256sum include/icurses.h include/icurses_posix.h $(CORE) "$(OUT)/libicurses.a" "$(OUT)/test-core" "$(OUT)/test-posix" > "$(OUT)/c-checkpoint.sha256"
+	git rev-parse HEAD > "$(OUT)/c-checkpoint-revision.txt"
+test: all profiles
+	$(MAKE) test-c
+	$(MAKE) test-application
+test-application: all
+	sha256sum -c "$(OUT)/c-checkpoint.sha256"
+	cmp "$(OUT)/c-checkpoint-revision.txt" "$(OUT)/source-revision.txt"
 	"$(OUT)/icurses-demo" --identity
 	"$(OUT)/ilua" tests/runtime.ilua
+	"$(OUT)/ilua" "$(LUA_SOURCE)/testes/symbolic-assignment.lua"
+	"$(OUT)/icurses-demo" --probe "$(LUA_SOURCE)/testes/symbolic-assignment.lua"
 	"$(OUT)/ilua" tests/policy.ilua demo/table.ilua
 	"$(OUT)/test-demo" "$(abspath $(OUT))/icurses-demo" "$(abspath demo/table.ilua)" j
 	"$(OUT)/test-demo" --live "$(abspath $(OUT))/icurses-live" "$(abspath $(OUT))/icurses-demo" "$(abspath demo/table.ilua)"
@@ -121,11 +133,17 @@ check-policy-edit: $(OUT)/test-demo $(OUT)/icurses-demo
 bundle: all $(PLATFORM_INSPECTION)
 	mkdir -p "$(OUT)/bundle"
 	cp "$(OUT)/icurses-demo" "$(OUT)/icurses-live" "$(OUT)/ilua" "$(OUT)/literal-probe" "$(OUT)/test-core" "$(OUT)/test-posix" "$(OUT)/test-demo" "$(OUT)/bundle/"
+	cp "$(OUT)/libicurses.a" include/icurses.h include/icurses_posix.h "$(OUT)/bundle/"
 	cp demo/table.ilua tests/runtime.ilua tests/policy.ilua docs/RUNNING.md "$(OUT)/bundle/"
+	cp "$(LUA_SOURCE)/testes/symbolic-assignment.lua" "$(OUT)/bundle/"
 	cp "$(LUA_SOURCE)/README.md" "$(OUT)/bundle/LUA-README.md"
 	cp "$(LUA_SOURCE)/lua.h" "$(OUT)/bundle/LUA-NOTICE.h"
 	cp "$(OUT)/compiler.sha256" "$(OUT)/source-revision.txt" "$(OUT)/bundle/"
-	cd "$(OUT)/bundle" && sha256sum icurses-demo icurses-live ilua literal-probe test-core test-posix test-demo table.ilua runtime.ilua policy.ilua RUNNING.md LUA-README.md LUA-NOTICE.h compiler.sha256 source-revision.txt > SHA256SUMS
+	sha256sum "$(OUT)/lua/liblua.a" "$(LUA_SOURCE)/lua.h" "$(LUA_SOURCE)/llex.c" "$(LUA_SOURCE)/lparser.c" "$(LUA_SOURCE)/testes/symbolic-assignment.lua" > "$(OUT)/bundle/runtime-source-and-library.sha256"
+	readelf -d "$(OUT)/icurses-demo" > "$(OUT)/bundle/runtime-libraries.txt"
+	! grep -Ei 'NEEDED.*lua|NEEDED.*libstdc\+\+' "$(OUT)/bundle/runtime-libraries.txt"
+	grep -F '$(OUT)/lua/liblua.a' "$(OUT)/icurses-demo.map" > "$(OUT)/bundle/runtime-link-map.txt"
+	cd "$(OUT)/bundle" && sha256sum icurses-demo icurses-live ilua literal-probe test-core test-posix test-demo libicurses.a icurses.h icurses_posix.h table.ilua runtime.ilua policy.ilua symbolic-assignment.lua RUNNING.md LUA-README.md LUA-NOTICE.h compiler.sha256 source-revision.txt runtime-source-and-library.sha256 runtime-libraries.txt runtime-link-map.txt > SHA256SUMS
 	tar -C "$(OUT)" -czf "$(OUT)/icurses-runtime.tar.gz" bundle
 	sha256sum "$(OUT)/icurses-runtime.tar.gz" > "$(OUT)/icurses-runtime.tar.gz.sha256"
 

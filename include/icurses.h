@@ -17,6 +17,7 @@ typedef struct {
     IcEvent event;
     int available;
     int needs_escape_deadline;
+    int invalid_buffer;
 } IcDecodedEvent;
 size_t ic_receive_bytes(IcReceivedBytes *buffer, const void *bytes, size_t count);
 IcDecodedEvent ic_received_bytes_to_event(IcReceivedBytes received, int escape_expired);
@@ -31,13 +32,14 @@ typedef struct {
 } IcScreen;
 typedef struct { unsigned char foreground, background, bold; } IcStyle;
 typedef struct { int row, first, past; } IcChangedRegion;
-typedef struct { IcChangedRegion rows[IC_ROWS]; size_t count; int cursor_changed; } IcChangedRegions;
+typedef struct { IcChangedRegion rows[IC_ROWS]; size_t count; int cursor_changed, invalid_screen; } IcChangedRegions;
 typedef struct { unsigned colors; } IcTerminalCapabilities;
 typedef struct {
     unsigned char bytes[IC_OUTPUT_BYTES];
     size_t count, acknowledged;
 } IcOutputBytes;
 int ic_empty_screen(int rows, int columns, IcScreen *desired);
+int ic_screen_valid(const IcScreen *screen);
 int ic_codepoint_columns(uint32_t codepoint);
 int ic_text_and_placement(const void *utf8, size_t length, int row, int column,
                           IcStyle style, IcScreen *desired);

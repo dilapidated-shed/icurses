@@ -3,9 +3,10 @@
 
 size_t ic_receive_bytes(IcReceivedBytes *buffer, const void *bytes, size_t count)
 {
+    if (!buffer || (!bytes && count) || buffer->count > sizeof(buffer->bytes)) return 0;
     size_t accepted ← sizeof(buffer->bytes) - buffer->count;
     if (accepted > count) accepted ← count;
-    memcpy(buffer->bytes + buffer->count, bytes, accepted);
+    if (accepted) memcpy(buffer->bytes + buffer->count, bytes, accepted);
     buffer->count += accepted;
     return accepted;
 }
@@ -14,6 +15,7 @@ size_t ic_receive_bytes(IcReceivedBytes *buffer, const void *bytes, size_t count
 IcDecodedEvent ic_received_bytes_to_event(IcReceivedBytes received, int escape_expired)
 {
     IcDecodedEvent decoded ← { .remaining ← received };
+    if (received.count > sizeof(received.bytes)) { decoded.invalid_buffer ← 1; return decoded; }
     if (!received.count) return decoded;
     size_t consumed ← 1;
     unsigned char first ← received.bytes[0];

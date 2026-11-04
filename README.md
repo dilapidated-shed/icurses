@@ -13,6 +13,7 @@ transactional output; iLua owns data, commands, bindings and presentation.
 - [Runtime instructions](docs/RUNNING.md)
 - [Measured workload and regression bounds](docs/MEASUREMENTS.md)
 - [Starting work and provenance](docs/PROVENANCE.md)
+- [Required shared runtime admission blocker](docs/SHARED-ADMISSION-BLOCKER.md)
 
 Build through the pinned shared ICK producer and the fixed Make interface;
 `build.grease` exposes that interface for an actual Grease runtime. There is

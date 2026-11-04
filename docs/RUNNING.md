@@ -3,6 +3,8 @@
 This bundle is a terminal application. It contains the native executable,
 the statically embedded modified Lua runtime, a standalone interpreter for the
 same runtime, literal application source, and acceptance executables.
+The checked `libicurses.a` and public headers are included for consumers on
+build hosts; the terminal/device path uses the prebuilt executables.
 
 Verify SHA256SUMS before execution from the extracted bundle directory.
 Run `./icurses-demo table.ilua` in an xterm-compatible UTF-8 terminal.

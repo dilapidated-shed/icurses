@@ -8,6 +8,8 @@ jobs:
   host:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    env:
+      IC_PERFORMANCE_PROFILE: github-ubuntu-24.04-x86_64
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -35,8 +37,12 @@ jobs:
           ref: 0b29f408433e92953cc72b1d3e06c7ac8139e439
           path: .stock-lua-source
           persist-credentials: false
-      - name: C checkpoint, iLua composition, observer and broken controls
-        run: make -j2 test mutants runtime-controls ICK="${{ steps.ick.outputs.compiler }}" LUA_SOURCE="$GITHUB_WORKSPACE/.lua-source" AICI="$GITHUB_WORKSPACE/.aici"
+      - name: Qualify and retain the C checkpoint before iLua execution
+        run: make -j2 test-c profiles mutants ICK="${{ steps.ick.outputs.compiler }}" LUA_SOURCE="$GITHUB_WORKSPACE/.lua-source" AICI="$GITHUB_WORKSPACE/.aici"
+      - name: Build runtime composition, packages and substitution controls
+        run: make -j2 all runtime-controls ICK="${{ steps.ick.outputs.compiler }}" LUA_SOURCE="$GITHUB_WORKSPACE/.lua-source" AICI="$GITHUB_WORKSPACE/.aici"
+      - name: Execute iLua application and measured workload after construction
+        run: make test-application ICK="${{ steps.ick.outputs.compiler }}" LUA_SOURCE="$GITHUB_WORKSPACE/.lua-source" AICI="$GITHUB_WORKSPACE/.aici"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
@@ -46,6 +52,7 @@ jobs:
             out/host/icurses-runtime.tar.gz.sha256
             out/host/*.log
             out/host/*.sha256
+            out/host/*-revision.txt
             out/host/mutants/*.log
           if-no-files-found: error
   android:
