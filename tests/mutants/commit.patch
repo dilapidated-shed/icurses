@@ -1,0 +1,5 @@
+--- a/src/output.c
++++ b/src/output.c
+@@ -1,1 +1,1 @@
+-    if (output->acknowledged != output->count) return 0;
++    if (output->acknowledged > output->count) return 0;

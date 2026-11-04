@@ -1,0 +1,32 @@
+iCurses input wait experiment — local verification
+Base repository: dilapidated-shed/icurses main at 663ca05acbab55cf82406d21acf792f4a9b98c6b
+Platform: Linux x86_64 (kernel 6.18.57)
+GCC: Debian 14.2.0-19
+Clang: 17.0.0
+
+GCC -O2 (-std=c11 -Wall -Wextra -Wpedantic -Werror): 16/16 PASS
+Clang -O1 AddressSanitizer + UndefinedBehaviorSanitizer: 16/16 PASS
+GCC repeated runs: 50 full suites, 800/800 cases PASS
+Patch: git diff --cached --check PASS; git apply --check PASS
+
+Case names:
+1. terminal ready before wait — PASS
+2. command pipe ready before wait — PASS
+3. simultaneous readiness — PASS
+4. new input arriving during wait — PASS
+5. bounded timeout — PASS
+6. user-space buffered terminal input — PASS
+7. buffered terminal plus command — PASS
+8. pipe EOF is readable — PASS
+9. pending signal: atomic unmask and EINTR — PASS
+10. signal delivered during wait — PASS
+11. queued bytes remain ready on EINTR — PASS
+12. invalid arguments and restore — PASS
+13. closed descriptor — PASS
+14. zero watched descriptors — PASS
+15. normal timeout and terminal restore — PASS
+16. PTY size + SIGWINCH + restore — PASS
+
+Scope: isolated POSIX PTY/pipe tests only. No radare2 or PDCurses backends compiled.
+No Windows, macOS, BSD, Android, X11, or SDL verification conducted.
+No remote repository modification.

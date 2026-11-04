@@ -1,0 +1,5 @@
+--- a/src/posix.c
++++ b/src/posix.c
+@@ -1,1 +1,1 @@
+-    if (native->modes_changed && tcsetattr(native->input, TCSANOW, &native->encountered)) {
++    if (0 && native->modes_changed && tcsetattr(native->input, TCSANOW, &native->encountered)) {

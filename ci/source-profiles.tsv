@@ -1,0 +1,11 @@
+path	role	profile
+src/	owned-terminal-transformations-and-adapter	icky-c
+include/	owned-semantic-and-native-boundary	icky-c
+demo/main.c	owned-native-runtime-bridge	icky-c
+tests/*.c	owned-independent-observer-and-harness	icky-c
+demo/table.ilua	owned-application-policy	modified-ilua
+tests/runtime.ilua	owned-runtime-semantic-probe	modified-ilua
+libr_cons/	foreign-unmodified-reference	radare2-pinned
+pdcurses/	foreign-unmodified-reference	pdcurses-pinned
+research/recovered/	historical-unexecuted-experiment	ordinary-c-and-build-archaeology
+.lua-source/	foreign-runtime	exact-modified-lua-fork

@@ -1,0 +1,5 @@
+--- a/src/posix.c
++++ b/src/posix.c
+@@ -1,1 +1,1 @@
+-    if (request.buffered_terminal) result.conditions |= IC_WAIT_TERMINAL;
++    if (0 && request.buffered_terminal) result.conditions |= IC_WAIT_TERMINAL;

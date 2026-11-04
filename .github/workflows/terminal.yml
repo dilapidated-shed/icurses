@@ -1,0 +1,112 @@
+name: iCurses exact-source acceptance
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  host:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      IC_PERFORMANCE_PROFILE: github-ubuntu-24.04-x86_64
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: isomorphisms/ai-ci/ick-host@618223d47315a180851c1539197cdcdb761a4b0d
+        id: ick
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: isomorphisms/lua
+          ref: 87306483cec50f8c750a22dda1d0742246fad756
+          path: .lua-source
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: isomorphisms/ai-ci
+          ref: a66e3a9bb1070a338f8c4a67f9b4b4ac39dfb5ec
+          path: .aici
+          persist-credentials: false
+      - name: Record compiler identity
+        run: make -f ci/bootstrap.mk identity ICK="${{ steps.ick.outputs.compiler }}"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: isomorphisms/lua
+          ref: 0b29f408433e92953cc72b1d3e06c7ac8139e439
+          path: .stock-lua-source
+          persist-credentials: false
+      - name: Qualify and retain the C checkpoint before iLua execution
+        run: make -j2 test-c profiles mutants ICK="${{ steps.ick.outputs.compiler }}" LUA_SOURCE="$GITHUB_WORKSPACE/.lua-source" AICI="$GITHUB_WORKSPACE/.aici"
+      - name: Build runtime composition, packages and substitution controls
+        run: make -j2 all runtime-controls ICK="${{ steps.ick.outputs.compiler }}" LUA_SOURCE="$GITHUB_WORKSPACE/.lua-source" AICI="$GITHUB_WORKSPACE/.aici"
+      - name: Execute iLua application and measured workload after construction
+        run: make test-application ICK="${{ steps.ick.outputs.compiler }}" LUA_SOURCE="$GITHUB_WORKSPACE/.lua-source" AICI="$GITHUB_WORKSPACE/.aici"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: icurses-host-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            out/host/icurses-runtime.tar.gz
+            out/host/icurses-runtime.tar.gz.sha256
+            out/host/*.log
+            out/host/*.sha256
+            out/host/*-revision.txt
+            out/host/mutants/*.log
+          if-no-files-found: error
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [x86_64, arm64-v8a]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: isomorphisms/lua
+          ref: 87306483cec50f8c750a22dda1d0742246fad756
+          path: .lua-source
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: isomorphisms/ai-ci
+          ref: a66e3a9bb1070a338f8c4a67f9b4b4ac39dfb5ec
+          path: .aici
+          persist-credentials: false
+      - uses: isomorphisms/ai-ci/ick-android@618223d47315a180851c1539197cdcdb761a4b0d
+        id: ick
+        with:
+          abi: ${{ matrix.abi }}
+          ndk: /usr/local/lib/android/sdk/ndk/27.3.13750724
+      - name: Compile literal Icky source; assemble and link through NDK
+        run: make -j2 all bundle ICK="${{ steps.ick.outputs.compiler }}" LUA_SOURCE="$GITHUB_WORKSPACE/.lua-source" AICI="$GITHUB_WORKSPACE/.aici" ANDROID_ABI="${{ matrix.abi }}" NDK=/usr/local/lib/android/sdk/ndk/27.3.13750724 OUT="out/${{ matrix.abi }}"
+      - name: Permit hosted emulator acceleration
+        if: matrix.abi == 'x86_64'
+        run: sudo chmod 666 /dev/kvm
+      - uses: reactivecircus/android-emulator-runner@b530d96654c385303d652368551fb075bc2f0b6b
+        if: matrix.abi == 'x86_64'
+        with:
+          api-level: 34
+          target: default
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          script: make -f ci/emulator.mk execute OUT=out/x86_64
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: icurses-android-${{ matrix.abi }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            out/${{ matrix.abi }}/icurses-runtime.tar.gz
+            out/${{ matrix.abi }}/icurses-runtime.tar.gz.sha256
+            out/${{ matrix.abi }}/*.sha256
+            out/${{ matrix.abi }}/emulator-*.txt
+            out/${{ matrix.abi }}/android-elf.txt
+            out/${{ matrix.abi }}/build-receipt.tsv
+          if-no-files-found: error

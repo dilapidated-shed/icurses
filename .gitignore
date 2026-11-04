@@ -1,0 +1,6 @@
+out/
+.ick-host-source/
+.ick-android-*-source/
+.lua-source/
+.stock-lua-source/
+.aici/

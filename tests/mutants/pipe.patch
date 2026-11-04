@@ -1,0 +1,5 @@
+--- a/src/posix.c
++++ b/src/posix.c
+@@ -1,1 +1,1 @@
+-        if (sources[index].revents & POLLIN) result.conditions |= data;
++        if (!index && (sources[index].revents & POLLIN)) result.conditions |= data;

@@ -1,0 +1,14 @@
+#!/usr/bin/env grease
+# A supplied exact Grease runtime calls the fixed Make interface.
+set -e
+if (len(ARGV) < 4) {
+  write -- 'Usage: grease build.grease ABSOLUTE_REPO ABSOLUTE_ICK ABSOLUTE_AICI ABSOLUTE_LUA [make-target]' >&2
+  exit 2
+}
+var root = ARGV[0]
+var compiler = ARGV[1]
+var aici = ARGV[2]
+var lua = ARGV[3]
+var target = 'test'
+if (len(ARGV) > 4) { setvar target = ARGV[4] }
+exec make -C $root ICK=$compiler AICI=$aici LUA_SOURCE=$lua $target
