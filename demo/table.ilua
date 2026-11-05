@@ -81,8 +81,8 @@ function icurses_presentation(state, width, height)
         if row >= 0 and row < height then
             requests[#requests + 1] ← {
                 row ← row, column ← column or 0, text ← text,
-                foreground ← selected and 0 or 7,
-                background ← selected and 6 or 0,
+                foreground ← 8,
+                background ← 8,
                 bold ← selected and 1 or 0
             }
         end

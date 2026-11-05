@@ -98,8 +98,8 @@ static int presentation_to_desired(lua_State *runtime, int application, int colu
         int row, column, foreground, background, bold;
         if (field_integer(runtime,"row",0,rows-1,&row) ||
             field_integer(runtime,"column",-IC_COLS,IC_COLS,&column) ||
-            field_integer(runtime,"foreground",0,7,&foreground) ||
-            field_integer(runtime,"background",0,7,&background) ||
+            field_integer(runtime,"foreground",0,IC_DEFAULT_COLOR,&foreground) ||
+            field_integer(runtime,"background",0,IC_DEFAULT_COLOR,&background) ||
             field_integer(runtime,"bold",0,1,&bold)) return -1;
         lua_getfield(runtime,-1,"text");
         size_t length;

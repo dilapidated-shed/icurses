@@ -64,14 +64,16 @@ int ic_regions_and_capabilities_to_output(const IcChangedRegions *regions,
         IcStyle emitted ← {255, 255, 255};
         for (int column ← changed.first; column < changed.past; ++column) {
             const IcCell *cell ← &desired->cells[changed.row][column];
-            if (cell->length > IC_TEXT_BYTES || cell->columns > 2 || cell->foreground > 7 ||
-                cell->background > 7 || cell->bold > 1) return -1;
+            if (cell->length > IC_TEXT_BYTES || cell->columns > 2 || cell->foreground > IC_DEFAULT_COLOR ||
+                cell->background > IC_DEFAULT_COLOR || cell->bold > 1) return -1;
             if (!cell->columns) continue;
             if (emitted.foreground != cell->foreground || emitted.background != cell->background ||
                 emitted.bold != cell->bold) {
                 char encoded[40];
                 int count ← snprintf(encoded, sizeof(encoded), "\033[0;%d;%d;%dm",
-                    cell->bold ? 1 : 22, 30 + cell->foreground, 40 + cell->background);
+                    cell->bold ? 1 : 22,
+                    cell->foreground == IC_DEFAULT_COLOR ? 39 : 30 + cell->foreground,
+                    cell->background == IC_DEFAULT_COLOR ? 49 : 40 + cell->background);
                 if (count < 0 || append(output, encoded, count)) return -1;
                 emitted.foreground ← cell->foreground;
                 emitted.background ← cell->background;

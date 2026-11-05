@@ -20,6 +20,7 @@ for _, width in ipairs({1, 20, 80, 200}) do
         for _, request in ipairs(requests) do
             assert(request.row >= 0 and request.row < height)
             assert(type(request.text) ≟ "string")
+            assert(request.foreground ≟ 8 and request.background ≟ 8)
         end
         assert(state.selected ≟ selected and state.items[2].label ≟ "Çınar")
     end
