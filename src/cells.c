@@ -13,7 +13,7 @@ int ic_empty_screen(int rows, int columns, IcScreen *desired)
     memset(desired, 0, sizeof(*desired));
     desired->rows ← rows;
     desired->columns ← columns;
-    IcStyle ordinary ← {7, 0, 0};
+    IcStyle ordinary ← {IC_DEFAULT_COLOR, IC_DEFAULT_COLOR, 0};
     for (int row ← 0; row < rows; ++row)
         for (int column ← 0; column < columns; ++column)
             desired->cells[row][column] ← blank_cell(ordinary);
@@ -61,7 +61,7 @@ int ic_text_and_placement(const void *utf8, size_t length, int row, int column,
                           IcStyle style, IcScreen *desired)
 {
     if (!ic_screen_valid(desired) || (!utf8 && length) || row < 0 || row >= desired->rows ||
-        style.foreground > 7 || style.background > 7 || style.bold > 1)
+        style.foreground > IC_DEFAULT_COLOR || style.background > IC_DEFAULT_COLOR || style.bold > 1)
         return -1;
     const unsigned char *source ← utf8;
     size_t offset ← 0;

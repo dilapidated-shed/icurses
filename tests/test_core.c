@@ -92,9 +92,30 @@ static void rendering(void)
     REQUIRE(regions.invalid_screen);
     REQUIRE(ic_regions_and_capabilities_to_output(&regions,&desired,(IcTerminalCapabilities){8},&output) == -1);
 }
+static void configured_terminal_colors(void)
+{
+    IcScreen empty ← {0};
+    REQUIRE(!ic_empty_screen(1, 8, &desired));
+    REQUIRE(desired.cells[0][0].foreground == IC_DEFAULT_COLOR &&
+            desired.cells[0][0].background == IC_DEFAULT_COLOR);
+    REQUIRE(!ic_text_and_placement("own", 3, 0, 0,
+        (IcStyle){IC_DEFAULT_COLOR, IC_DEFAULT_COLOR, 1}, &desired));
+    IcChangedRegions regions ← ic_previous_and_desired_to_regions(&empty, &desired, 0);
+    REQUIRE(!ic_regions_and_capabilities_to_output(&regions, &desired,
+        (IcTerminalCapabilities){8}, &output));
+    memset(&observed, 0, sizeof(observed));
+    REQUIRE(!observe_output(&observed, output.bytes, output.count));
+    REQUIRE(observed.cells[0][0].fg == 8 && observed.cells[0][0].bg == 8 &&
+            observed.cells[0][0].bold);
+    REQUIRE(ic_text_and_placement("x", 1, 0, 0, (IcStyle){9,8,0}, &desired) == -1);
+    REQUIRE(ic_text_and_placement("x", 1, 0, 0, (IcStyle){8,9,0}, &desired) == -1);
+    desired.cells[0][0].background ← 9;
+    REQUIRE(ic_regions_and_capabilities_to_output(&regions, &desired,
+        (IcTerminalCapabilities){8}, &output) == -1);
+}
 int main(void)
 {
-    decoder(); rendering();
+    decoder(); rendering(); configured_terminal_colors();
     puts("PASS incremental decoder, literal cells, independent terminal observer, transactional output");
     return 0;
 }

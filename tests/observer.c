@@ -26,6 +26,8 @@ int observe_output(ObservedTerminal *terminal, const unsigned char *bytes, size_
                             if (value == 22) terminal->bold ← 0;
                             if (value >= 30 && value <= 37) terminal->fg ← value - 30;
                             if (value >= 40 && value <= 47) terminal->bg ← value - 40;
+                            if (value == 39) terminal->fg ← 8;
+                            if (value == 49) terminal->bg ← 8;
                         }
                     } else return -1;
                     break;

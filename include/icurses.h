@@ -8,6 +8,8 @@
 #define IC_COLS 200
 #define IC_TEXT_BYTES 20
 #define IC_OUTPUT_BYTES 1048576
+/* SGR 39/49 preserve the terminal owner's configured foreground/background. */
+#define IC_DEFAULT_COLOR 8
 enum { IC_KEY_TEXT, IC_KEY_ESCAPE, IC_KEY_UP, IC_KEY_DOWN, IC_KEY_LEFT,
        IC_KEY_RIGHT, IC_KEY_HOME, IC_KEY_END, IC_KEY_PAGE_UP, IC_KEY_PAGE_DOWN };
 typedef struct { unsigned kind; uint32_t codepoint; } IcEvent;
